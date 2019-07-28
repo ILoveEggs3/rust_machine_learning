@@ -281,6 +281,7 @@ T: Default + Copy
         }
         self.data.append(row);
         self.M += 1;
+        
     }
 
     fn det(sub_matrix: &Vec<&[T]>) -> Option<T> {
