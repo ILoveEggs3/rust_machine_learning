@@ -1,0 +1,45 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'machine_learning'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=machine_learning",
+                    "--package=machine_learning"
+                ],
+                "filter": {
+                    "name": "machine_learning",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'machine_learning'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=machine_learning",
+                    "--package=machine_learning"
+                ],
+                "filter": {
+                    "name": "machine_learning",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
