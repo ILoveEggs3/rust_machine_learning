@@ -1,6 +1,7 @@
 use std::ops::*;
 use std::convert::TryInto;
 use std::fmt;
+use std::cmp;
 
 macro_rules! mat {
     ($($( $x:expr ), *); *) => {
@@ -24,7 +25,18 @@ pub struct Matrix<T> {
     M: usize,
     N: usize,
     data: Vec<T>,
-    determinant: Option<T>,
+}
+
+struct SquaredMatrix<T> {
+    M: usize,
+    N: usize,
+    data: Vec<T>,
+}
+
+#[repr(C)]
+struct Minor<T> {
+    coef: T,
+    matrix: Matrix<T>,
 }
 
 #[allow(dead_code)]
@@ -36,11 +48,6 @@ pub struct Perceptron<T> {
     activation_fn: fn(integration_result: T) -> T,
 }
 
-/*
-pub struct MatrixV2<M, N, T> {
-
-}
-*/
 pub trait Output<T> {
     fn output(&self) -> T;
 }
@@ -74,39 +81,75 @@ pub trait MatrixMatrixMul<T> {
 }
 
 pub trait Determinant<T> {
-    fn determinant(&self) -> T {
+    fn det(m: &Matrix<T>) -> T {
         panic!("trait Determinant not implemented for type T");
     }
 }
 
-impl<T: Mul<Output = T> + Sub<Output = T>> Determinant<T> for Matrix<T> where 
-T: Default + Add + Sub + AddAssign + Mul + PartialEq + Copy {
-    fn determinant(&self) -> T {
-        if self.N != self.M {
-            panic!("Cannot calculate determinant of non-square matrices");
-        }
-        let m22_det_fn = |m : &Matrix<T>| -> T {
-            if m.M != 2 || m.N != 2 {
-                panic!("Anonymous function should be called with 2x2 matrices only");
-            }
-            let a = &m[0][0];
-            let b = &m[0][1];           
-            let c = &m[1][0];           
-            let d = &m[1][1];
+trait MinorDeterminant<T> {
+    fn det(m: &Minor<T>) -> T {
+        panic!("trait Determinant not implemented for type T");
+    }
+}
 
-            *a * *d - *b * *c           
-        };
+pub trait PushMultiple<T> {
+    fn push_multiple(&mut self, data: &[T]);
+}
 
-        if self.M == 2 {
-            (m22_det_fn)(&self)
-        } else {
-            Default::default()
+impl<T> PushMultiple<T> for Vec<T> where
+T: Copy {
+    fn push_multiple(&mut self, data: &[T]) {
+        self.reserve(data.len());
+        for idx in 0..data.len() {
+            self.push(data[idx]);
         }
     }
 }
 
-impl<T> std::cmp::PartialEq for Matrix<T> where
-T: std::cmp::PartialEq {
+impl<T: Mul<Output = T> + Sub<Output = T>> Determinant<T> for Matrix<T> where 
+T: Default + Add + AddAssign + Sub + SubAssign + Mul + MulAssign + Copy + Neg {
+    fn det(m: &Matrix<T>) -> T { 
+        /*** It's also a gun ***/
+        let mut result = Default::default();
+
+        match m.M {
+            1 => {
+                result = m[0][0];
+            },
+            2 => {
+                result = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+            },
+            3 => {
+                for i in 0..m.M {
+                    let mut a = m[0][i];
+                    let mut b = m[0][(m.N-1)-i];
+                    for j in 1..m.N {
+                        let idx1 = (i + j) % m.M;
+                        let idx2 = (((2 * m.N) - 1) - i - j) % m.N;
+                        a *= m[j][idx1];
+                        b *= m[j][idx2];
+                    }   
+                    result += a - b;
+                }   
+            },
+            _ => {
+                let minors_vec = m.get_minors();
+                for i in 0..minors_vec.len() {
+                    let det = minors_vec[i].coef * Matrix::det(&minors_vec[i].matrix);
+                    if i % 2 == Default::default() {
+                        result += det;
+                    } else {
+                        result -= det;
+                    }
+                }
+            },
+        }
+        result
+    }
+}
+
+impl<T> PartialEq for Matrix<T> where
+T: PartialEq {
     fn eq(&self, other: &Self) -> bool {
         if self.M != other.M || self.N != other.N {
             return false
@@ -148,7 +191,7 @@ T: Default + Copy + AddAssign + std::fmt::Debug {
         for i in 0..self.M {
             for j in 0..other.N {
                 for k in 0..self.N {
-                    output[i][j] += self[i][k] * other[k][j];
+                    output[i][j] += self[i][k] * other[k][j];  
                 }
             }
         }
@@ -248,7 +291,7 @@ T: Default + Copy
             }
         }
 
-        Matrix { M, N, data, determinant: None }
+        Matrix { M, N, data }
     }
 
     fn new_identity(size: usize, val: T) -> Matrix<T> {
@@ -261,14 +304,14 @@ T: Default + Copy
 
     fn new_empty(M: usize, N: usize) -> Matrix<T> {
         let data = vec![Default::default(); M * N];
-        Matrix { M, N, data, determinant: None }
+        Matrix { M, N, data }
     }
 
     fn from_raw(M: usize, N: usize, data: Vec<T>) -> Matrix<T> {
         if M * N != data.len() {
             panic!("Provided dimensions or data is incorrect\nM * N does not equal data.len()");
         }
-        Matrix { M, N, data, determinant: None }
+        Matrix { M, N, data }
     }
 
     fn add_row(&mut self, row: &mut Vec<T>) {
@@ -283,19 +326,32 @@ T: Default + Copy
         self.M += 1;
         
     }
+}
 
-    fn det(sub_matrix: &Vec<&[T]>) -> Option<T> {
-        let mut v = Vec::new();
-        if sub_matrix.len() < 2 || sub_matrix.len() != sub_matrix[0].len() {
-            panic!("matrix too small of not square");
-        }
-        for i in 0..sub_matrix.len() {
-            for j in 0..sub_matrix[0].len() {
-                ;
+impl<T> Matrix<T> where 
+T: Copy + Mul + MulAssign + Add + AddAssign + Neg + Default {
+    fn get_minors(&self) -> Vec<Minor<T>> {
+        let mut minors_vec = Vec::with_capacity(self.M);
+        for idx in 0..self.M {
+            let mut data = Vec::new();
+            data.reserve((self.M-1) * (self.M-1));
+            for j in 1..self.N {
+                data.push_multiple(&self[j][0..idx]);
+                data.push_multiple(&self[j][idx+1..self.N]);
             }
+            let matrix = Matrix::from_raw(self.M-1, self.N-1, data);
+            let coef = self[0][idx];
+            let minor = Minor{ coef, matrix };
+            minors_vec.push(minor);
         }
+        minors_vec
+    }
+}
 
-        Some(Default::default())
+impl<T: Mul<Output = T> + Sub<Output = T> + Add<Output = T>> MinorDeterminant<T> for Minor<T> where
+T: Default + Copy + Add + AddAssign + Mul + MulAssign + Sub + SubAssign + Neg {
+    fn det(m: &Minor<T>) -> T {
+        m.coef * Matrix::det(&m.matrix)
     }
 }
 
@@ -310,6 +366,57 @@ impl<T> Index<usize> for Matrix<T> {
 impl<T> IndexMut<usize> for Matrix<T> {
     fn index_mut<'a>(&'a mut self, row_idx: usize) -> &'a mut Self::Output {
         &mut self.data[row_idx * self.N .. (row_idx + 1) * self.N]
+    }
+}
+
+pub fn test_determinant_2x2() {
+    let expected;
+    let actual;
+    let matrix;
+
+    matrix = mat![1, 2; 3, 4];
+    expected = -2;
+    actual = Matrix::det(&matrix);
+
+    test_determinant_nxn(matrix, expected);
+}
+
+pub fn test_determinant_3x3() {
+    let expected;
+    let actual;
+    let matrix;
+
+    matrix = mat![1, 2, 3; 4, 5, 6; 7, 8, 9];
+    expected = 0;
+    actual = Matrix::det(&matrix);
+
+    test_determinant_nxn(matrix, expected);
+}
+
+pub fn test_determinant_4x4() {
+    let expected;
+    let matrix;
+
+    matrix = mat![1, 2, 3, 4; 5, 6, 7, 8; 9, 10, 11, 12; 13, 14, 15, 16];
+    expected = 0;
+
+    test_determinant_nxn(matrix, expected);
+}
+
+
+pub fn test_determinant_nxn<T: Mul<Output = T> + Sub<Output = T> + Add<Output = T>>(matrix: Matrix<T>, expected: T) -> bool
+where T: Copy + Add + AddAssign + Mul + MulAssign + Sub + SubAssign + Neg + PartialEq + Default + fmt::Display {
+    //#useless code... but cute
+    let actual;
+    actual = Matrix::det(&matrix);
+    match actual == expected {
+        true => { 
+            println!("test_determinant_{}x{} passed",matrix.M, matrix.N); 
+            true },
+        false => { 
+            println!("\ntest_determinant_{}x{} failed", matrix.M, matrix.N);
+            println!("\nactual = {} != {} = expected\n", actual, expected);
+            false },
     }
 }
 
@@ -351,12 +458,36 @@ mod tests {
     }
 
     #[test]
-    fn test_determinant_2x2() {
-        let m = mat![5, 4; 4, 5];
-        let expected = 9;
-        let calculated = m.determinant();
-        assert_eq!(expected, calculated);
+    fn test_push_multiple() {
+        let initial_v = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let mut new_v = Vec::with_capacity(4);
+        new_v.push_multiple(&initial_v[4..8]);
+        assert_eq!(new_v.len(), 4);
+        assert_eq!(new_v[0], 4);
+        assert_eq!(new_v[3], 7);
     }
+
+    #[test]
+    fn test_determinant_2x2() {
+        let matrix = mat![1, 2; 3, 4];
+        let expected = -2;
+        assert!(super::test_determinant_nxn(matrix, expected));
+    }
+
+    #[test]
+    fn test_determinant_3x3() {
+        let matrix = mat![1, 2, 3; 4, 5, 6; 7, 8, 9];
+        let expected = 0;
+        assert!(super::test_determinant_nxn(matrix, expected));
+    }
+
+    #[test]
+    fn test_determinant_4x4() {
+        let matrix = mat![1, 2, 3, 4; 5, 6, 7, 8; 9, 10, 11, 12; 13, 14, 15, 16];
+        let expected = 0;
+        assert!(super::test_determinant_nxn(matrix, expected));
+    } 
+
 }
 
 fn main() {
@@ -415,6 +546,16 @@ fn ml_main() {
     println!("{}", result);
 
     println!("{} * {} = {}", m1, m2, result);
+
+    test_determinant_2x2();
+
+    let matrix = mat![1, 2, 3; 4, 5, 6; 7, 8, 9];
+    let expected = 0;
+
+    let result = test_determinant_nxn(matrix, expected);
+
+
+
 }
 
 mod question_photo {
