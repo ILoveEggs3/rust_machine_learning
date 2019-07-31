@@ -472,6 +472,13 @@ mod tests {
     }
 
     #[test]
+    fn test_determinant_1x1() {
+        let matrix = mat![1];
+        let expected = 1;
+        assert!(super::test_determinant_nxn(matrix, expected));
+    }
+
+    #[test]
     fn test_determinant_2x2() {
         let matrix = mat![1, 2; 3, 4];
         let expected = -2;
@@ -491,6 +498,13 @@ mod tests {
         let expected = 0;
         assert!(super::test_determinant_nxn(matrix, expected));
     } 
+
+    #[test]
+    fn test_determinant_5x5() {
+        let matrix = mat![1, 2, 3, 4, 5; 6, 7, 8, 9, 10; 11, 12, 13, 14, 15; 16, 17, 18, 19, 20; 21, 22, 23, 24, 25];
+        let expected = 0;
+        assert!(super::test_determinant_nxn(matrix, expected));
+    }
 
 }
 
