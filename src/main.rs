@@ -120,6 +120,10 @@ T: Default + Add + AddAssign + Sub + SubAssign + Mul + MulAssign + Copy + Neg {
                 result = m[0][0] * m[1][1] - m[0][1] * m[1][0];
             },
             3 => {
+                /* I initially thought this would work for all matrices, 
+                then for matrices 3x3 and lower 
+                then realise that i was really wrong,
+                but would feel bad about deleting it */
                 for i in 0..m.M {
                     let mut a = m[0][i];
                     let mut b = m[0][(m.N-1)-i];
