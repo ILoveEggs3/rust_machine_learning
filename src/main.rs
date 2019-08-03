@@ -425,7 +425,7 @@ where T: Copy + Add + AddAssign + Mul + MulAssign + Sub + SubAssign + Neg + Part
 }
 
 mod tests {
-    use super::*;
+    use super::{Matrix, MatrixMatrixMul, Mul, PushMultiple};
 
     #[test]
     fn test_index() {
@@ -564,16 +564,6 @@ fn ml_main() {
     println!("{}", result);
 
     println!("{} * {} = {}", m1, m2, result);
-
-    test_determinant_2x2();
-
-    let matrix = mat![1, 2, 3; 4, 5, 6; 7, 8, 9];
-    let expected = 0;
-
-    let result = test_determinant_nxn(matrix, expected);
-
-
-
 }
 
 mod question_photo {
